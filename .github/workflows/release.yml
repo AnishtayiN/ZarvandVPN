@@ -102,8 +102,8 @@ jobs:
 
       - name: Download tun2socks library (hev-socks5-tunnel AAR)
         run: |
-          mkdir -p android-app/android/libs
-          curl -sL -o android-app/android/libs/hev-socks5-tunnel.aar https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel.aar
+          mkdir -p android-app/android/app/libs
+          curl -sL -o android-app/android/app/libs/hev-socks5-tunnel.aar https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel.aar
 
       - name: Generate platform glue & Build APK
         working-directory: android-app
