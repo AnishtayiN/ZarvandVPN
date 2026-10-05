@@ -57,6 +57,16 @@ jobs:
           go build -trimpath -ldflags "-s -w -H windowsgui -X main.Version=${{ inputs.version }}" -o ..\build\ZarvandVPN-${{ inputs.version }}-x86.exe .
           Remove-Item ..\build\zarvand-core-*.exe
 
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc /DMyAppVersion=${{ inputs.version }} /DArch=x64 windows-launcher\installer.iss
+          & $iscc /DMyAppVersion=${{ inputs.version }} /DArch=x86 windows-launcher\installer.iss
+          Move-Item windows-launcher\Output\*.exe build\
+        continue-on-error: true
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

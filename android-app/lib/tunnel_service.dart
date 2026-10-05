@@ -73,8 +73,8 @@ class Settings {
 }
 
 class TunnelService {
-  static const _ch = MethodChannel('arefdns/tunnel');
-  static const _events = EventChannel('arefdns/tunnel_state');
+  static const _ch = MethodChannel('zarvand/tunnel');
+  static const _events = EventChannel('zarvand/tunnel_state');
   static Stream<String> get stateStream =>
       _events.receiveBroadcastStream().cast<String>();
 

@@ -1,43 +1,53 @@
 # ZarvandVPN
 
-A high-performance **DNS-tunnel VPN** client suite by the ZarvandVPN project.
+A high-performance **DNS-tunnel VPN** client suite — Windows & Android.
 
-## Components
+## Downloads
 
-| Component | Platform | Tech | Min OS |
-|---|---|---|---|
-| `ZarvandVPN-VPN-x64.exe` / `x86.exe` | Windows | Go 1.20 GUI launcher + embedded core | Windows 7 |
-| `zarvand_vpn` APK | Android | Flutter UI + VpnService + tun2socks (hev-socks5-tunnel) + Go core | Android 7.0 (API 24) |
+Grab the latest build from [Releases](https://github.com/AnishtayiN/ZarvandVPN/releases):
+
+| File | Platform | Notes |
+|---|---|---|
+| `ZarvandVPN-<ver>-x64-setup.exe` | Windows 7–11 (64-bit) | Full installer |
+| `ZarvandVPN-<ver>-x86-setup.exe` | Windows 7–11 (32-bit) | Full installer |
+| `ZarvandVPN-<ver>-x64.exe` / `x86.exe` | Windows 7–11 | Portable single exe |
+| `ZarvandVPN-<ver>-arm64-v8a-release.apk` | Android 7+ | Modern devices |
+| `ZarvandVPN-<ver>-armeabi-v7a-release.apk` | Android 7+ | Older devices |
+| `ZarvandVPN-<ver>-x86_64-release.apk` | Android 7+ | Emulators / x86 tablets |
 
 ## How it works
 
-The Go core opens a **SOCKS5 proxy on `127.0.0.1:18000`** and tunnels traffic over DNS queries
-to the configured tunnel server. The Windows launcher embeds the core binary and manages
-start/stop with a clean GUI. The Android app creates a TUN device via `VpnService` and routes
-all traffic into the core through `tun2socks`.
+The Go core opens a **SOCKS5 proxy on `127.0.0.1:18000`** and tunnels traffic over DNS
+queries to the configured tunnel servers.
 
-## Configuration
+- **Windows** — the launcher embeds the core, offers a full Settings UI and can flip the
+  Windows system proxy with one click, so browsers/apps are routed automatically.
+- **Android** — a `VpnService` TUN device routes all traffic through `tun2socks`
+  (hev-socks5-tunnel) into the core. No manual proxy configuration needed.
 
-- **Windows:** `%APPDATA%\ZarvandVPN\client_config.toml` (created on first run, edit `DOMAINS`,
-  `ENCRYPTION_KEY`, `DATA_ENCRYPTION_METHOD`, ... to match your server).
-- **Android:** set domains / encryption key in the app; config is generated automatically.
+## Settings (both apps)
 
-## Build & Release
+Everything the core supports is exposed in the UI:
 
-Releases are built by GitHub Actions:
+- **Tunnel & Security** — tunnel domains, encryption key, method (None / XOR / ChaCha20 /
+  AES-128/192/256-GCM), protocol (SOCKS5 / TCP)
+- **Resolvers** — one or more DNS server IPs with a balancing strategy
+- **Local proxy** — listen IP/port, optional SOCKS5 user/pass authentication
+- **Local DNS** — enable, listen IP/port, persistent cache, TTL
+- **Performance** — packet duplication (regular & setup), compression for upload/download
+  (Off / Zstd / LZ4 / Zlib), compression threshold, RX/TX and tunnel workers
+- **MTU** — min/max for upload and download
+- **Advanced** — base-encode data, log level (DEBUG / INFO / WARN / ERROR)
 
-1. Go to **Actions → Release → Run workflow**
-2. Enter the version (e.g. `1.0.0`)
-3. Windows exe (x64 + x86, Win7–11) and Android APKs (arm64, armv7, x86_64) are attached to the release.
+Windows stores settings in `%APPDATA%\ZarvandVPN\settings.json` and renders
+`client_config.toml` + `client_resolvers.txt` automatically. Android stores them locally
+and generates the same config format at connect time.
 
-## Local build (core only)
+## Building
 
-```bash
-go build -o zarvand-client ./cmd/client
-./zarvand-client -config client_config.toml
-```
+CI (`.github/workflows/release.yml`) builds everything — run it via
+**Actions → Release → Run workflow** and enter a version (e.g. `1.0.2`).
 
 ## License
 
 See [LICENSE](LICENSE).
-

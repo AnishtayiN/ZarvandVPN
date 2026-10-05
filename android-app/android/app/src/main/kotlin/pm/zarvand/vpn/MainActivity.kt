@@ -8,10 +8,11 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val methodCh = "arefdns/tunnel"
-    private val eventCh = "arefdns/tunnel_state"
+    private val methodCh = "zarvand/tunnel"
+    private val eventCh = "zarvand/tunnel_state"
     private val REQ_VPN = 1001
     private var pendingResult: MethodChannel.Result? = null
+    private var pendingIntent: Intent? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -54,7 +55,8 @@ class MainActivity : FlutterActivity() {
                         }
                         if (VpnService.prepare(this) != null) {
                             pendingResult = result
-                            startActivityForResult(intent, REQ_VPN)
+                            pendingIntent = intent
+                            startActivityForResult(VpnService.prepare(this), REQ_VPN)
                         } else {
                             TunnelManager.startService(this, intent)
                             result.success(null)
@@ -84,8 +86,13 @@ class MainActivity : FlutterActivity() {
         if (requestCode == REQ_VPN) {
             pendingResult?.success(null)
             pendingResult = null
-            if (resultCode == RESULT_OK) TunnelManager.emit("permissionGranted")
-            else TunnelManager.emit("permissionDenied")
+            if (resultCode == RESULT_OK) {
+                pendingIntent?.let { TunnelManager.startService(this, it) }
+                pendingIntent = null
+                TunnelManager.emit("permissionGranted")
+            } else {
+                TunnelManager.emit("permissionDenied")
+            }
         }
     }
 }

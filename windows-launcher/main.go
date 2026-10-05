@@ -18,6 +18,7 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 //go:embed core_amd64.gz
@@ -103,7 +104,9 @@ func defaultSettings() Settings {
 }
 
 var (
-	settings     = defaultSettings()
+	settings      = defaultSettings()
+	proxyWasOn    bool
+	proxyApplied  bool
 	corePath     string
 	configPath   string
 	settingsPath string
@@ -129,6 +132,7 @@ var (
 	cbEnc, cbProtocol, cbUpComp, cbDownComp              *walk.ComboBox
 	cbLog, cbStrategy                                    *walk.ComboBox
 	chkSocksAuth, chkLocalDNS, chkCache, chkBase64       *walk.CheckBox
+	chkProxy                                             *walk.CheckBox
 	tabWidget                                            *walk.TabWidget
 )
 
@@ -401,6 +405,32 @@ func extractCore() error {
 	return err
 }
 
+const proxyAddr = "127.0.0.1:18000"
+
+func applySystemProxy(on bool) {
+	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Internet Settings`, registry.SET_VALUE)
+	if err != nil {
+		appendLog("system proxy error: "+err.Error())
+		return
+	}
+	defer k.Close()
+	if on {
+		_ = k.SetDWordValue("ProxyEnable", 1)
+		_ = k.SetStringValue("ProxyServer", proxyAddr)
+		_ = k.SetStringValue("ProxyOverride", "localhost;127.*;192.168.*;10.*;<local>")
+		proxyApplied = true
+		appendLog("System proxy ON -> " + proxyAddr)
+	} else {
+		_ = k.SetDWordValue("ProxyEnable", 0)
+		proxyApplied = false
+		appendLog("System proxy OFF")
+	}
+}
+
+func refreshInternet() {
+	exec.Command("cmd", "/C", "taskkill /F /IM explorer.exe >nul & start explorer.exe").Start()
+}
+
 func appendLog(s string) {
 	if logView == nil || mw == nil {
 		return
@@ -458,6 +488,11 @@ func startCore() {
 
 	go func() {
 		appendLog("Starting ZarvandVPN core (" + Version + ")...")
+		if mw != nil {
+			mw.Synchronize(func() {
+				applySystemProxy(chkProxy != nil && chkProxy.Checked())
+			})
+		}
 		logFile := filepath.Join(configDirSafe(), "core.log")
 		c := exec.Command(corePath, "-config", configPath, "-resolvers", resolversPath, "-log", logFile)
 		c.Dir = configDirSafe()
@@ -476,6 +511,13 @@ func startCore() {
 		go scanOutput(stderr)
 		setRunning(true)
 		err := c.Wait()
+		if mw != nil {
+			mw.Synchronize(func() {
+				if proxyApplied {
+					applySystemProxy(false)
+				}
+			})
+		}
 		appendLog("Core exited: " + fmt.Sprint(err))
 		setRunning(false)
 	}()
@@ -563,6 +605,7 @@ func main() {
 							Label{AssignTo: &statusLbl, Text: "Status: Disconnected", TextColor: walk.RGB(200, 0, 0), Font: Font{PointSize: 11, Bold: true}},
 							Label{Text: "Local proxy (point your app at this):"},
 							Label{Text: "    SOCKS5  127.0.0.1:18000", Font: Font{Family: "Consolas", PointSize: 10}},
+							CheckBox{AssignTo: &chkProxy, Text: "Use as Windows system proxy automatically (browsers/apps)  — port " + proxyAddr},
 							Label{Text: "Log:"},
 							TextEdit{AssignTo: &logView, VScroll: true, ReadOnly: true},
 							Label{Text: "Config: %APPDATA%\\ZarvandVPN\\client_config.toml", TextColor: walk.RGB(120, 120, 120)},
