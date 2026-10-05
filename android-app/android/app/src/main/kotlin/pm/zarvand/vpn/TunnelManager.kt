@@ -16,14 +16,12 @@ object TunnelManager {
     }
 
     fun emit(state: String) {
-        eventSink?.success(state)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            eventSink?.success(state)
+        }
     }
 
-    fun start(activity: Activity, domains: List<String>, key: String, server: String) {
-        val intent = Intent(activity, TunnelVpnService::class.java)
-        intent.putExtra("domains", domains.toTypedArray())
-        intent.putExtra("key", key)
-        intent.putExtra("server", server)
+    fun startService(activity: Activity, intent: Intent) {
         if (android.os.Build.VERSION.SDK_INT >= 29) {
             activity.startForegroundService(intent)
         } else {
