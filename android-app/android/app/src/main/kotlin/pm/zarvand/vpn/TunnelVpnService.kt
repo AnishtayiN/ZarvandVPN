@@ -91,6 +91,7 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun stopAll(emitState: Boolean = true) {
+        try { hev.htproxy.TProxyService.TProxyStopService() } catch (_: Exception) {}
         try { tunProcess?.destroy() } catch (_: Exception) {}
         try { coreProcess?.destroy() } catch (_: Exception) {}
         try { tun?.close() } catch (_: Exception) {}
@@ -159,14 +160,8 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    /** Creates TUN and runs tun2socks (hev-socks5-tunnel) pointing at our local SOCKS5. */
+    /** Creates TUN and starts tun2socks (hev-socks5-tunnel AAR/JNI) pointing at our local SOCKS5. */
     private fun startTunnel(listenIp: String, listenPort: Int): Boolean {
-        val nativeDir = applicationInfo.nativeLibraryDir
-        val tunBin = File(nativeDir, "libhevtunnel.so")
-        if (!tunBin.exists()) {
-            TunnelManager.emit("log:tun2socks binary missing")
-            return false
-        }
         val confDir = File(filesDir, "tun").apply { mkdirs() }
         val conf = File(confDir, "tun.conf")
         conf.writeText("""
@@ -178,10 +173,18 @@ socks5:
   address: $listenIp
   port: $listenPort
   udp: 'udp'
-  misc:
-    task-stack-size: 24576
-    udp_read_timeout: 5000
-    limit-nofile: 65535
+
+mapdns:
+  address: $TUN_DNS
+  port: 53
+  network: 100.64.0.0
+  netmask: 255.192.0.0
+  cache-size: 10000
+
+misc:
+  task-stack-size: 24576
+  udp-read-write-timeout: 5000
+  limit-nofile: 65535
 """.trimIndent())
 
         val builder = Builder()
@@ -197,22 +200,11 @@ socks5:
             TunnelManager.emit("log:VpnService.establish() failed")
             return false
         }
-        val pb = ProcessBuilder(
-            tunBin.absolutePath, "-c", conf.absolutePath, "-f", tun!!.detachFd().toString()
-        )
-        pb.redirectErrorStream(true)
         return try {
-            tunProcess = pb.start()
-            Thread {
-                try {
-                    tunProcess?.inputStream?.bufferedReader()?.forEachLine { line ->
-                        TunnelManager.emit("log:$line")
-                    }
-                } catch (_: Exception) {}
-            }.start()
+            hev.htproxy.TProxyService.TProxyStartService(conf.absolutePath, tun!!.detachFd())
             true
         } catch (e: Exception) {
-            TunnelManager.emit("log:tun start failed: ${e.message}")
+            TunnelManager.emit("log:tun2socks start failed: ${e.message}")
             false
         }
     }

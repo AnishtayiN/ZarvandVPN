@@ -100,17 +100,20 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o android-app/android/app/src/main/jniLibs/armeabi-v7a/libzarvand.so ./cmd/client
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o android-app/android/app/src/main/jniLibs/x86_64/libzarvand.so ./cmd/client
 
-      - name: Download tun2socks (hev-socks5-tunnel)
+      - name: Download tun2socks library (hev-socks5-tunnel AAR)
         run: |
-          JDIR=android-app/android/app/src/main/jniLibs
-          curl -sL -o $JDIR/arm64-v8a/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-arm64-v8a
-          curl -sL -o $JDIR/armeabi-v7a/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-armeabi-v7a
-          curl -sL -o $JDIR/x86_64/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-x86_64
+          mkdir -p android-app/android/libs
+          curl -sL -o android-app/android/libs/hev-socks5-tunnel.aar https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel.aar
 
       - name: Generate platform glue & Build APK
         working-directory: android-app
         run: |
           flutter create --platforms=android . --org pm.zarvand --project-name zarvand_vpn
+          # guard: flutter create must not drop our tun2socks dependency / gradle tweaks
+          grep -q "hev-socks5-tunnel.aar" android/app/build.gradle || printf '\ndependencies {\n    implementation files(\x27libs/hev-socks5-tunnel.aar\x27)\n}\n' >> android/app/build.gradle
+          grep -q "android.enableJetifier" android/gradle.properties || true
+          grep -q "^shrink=false" android/gradle.properties || echo "shrink=false" >> android/gradle.properties
+          grep -n "hev-socks5-tunnel.aar" android/app/build.gradle
           flutter pub get
           flutter build apk --release --split-per-abi --build-name="${{ inputs.version }}"
 
