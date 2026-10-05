@@ -1,0 +1,9 @@
+build/
+out/
+*.exe
+*.apk
+*.so
+!android-app/android/app/src/main/jniLibs/**
+windows-launcher/core_*.gz
+windows-launcher/*.syso
+__pycache__/

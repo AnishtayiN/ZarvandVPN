@@ -1,0 +1,47 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { it.eachLine { line ->
+        def parts = line.split("=")
+        if (parts.length >= 2) localProperties.setProperty(parts[0].trim(), parts[1].trim())
+    }}
+}
+
+android {
+    namespace "pm.zarvand.vpn"
+    compileSdk 35
+    ndkVersion "26.1.10909125"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions { jvmTarget = '17' }
+
+    defaultConfig {
+        applicationId "pm.zarvand.vpn"
+        minSdk 24        // Android 7.0
+        targetSdk 35
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+

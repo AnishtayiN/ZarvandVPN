@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "نسخه برنامه (مثال: 1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows client (Win7-11)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Go 1.20.14 (Win7 compatible)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://go.dev/dl/go1.20.14.windows-amd64.zip" -OutFile go.zip
+          Expand-Archive go.zip -DestinationPath C:\go120
+          echo "C:\go120\go\bin" | Out-File -Append $env:GITHUB_PATH
+          echo "GOROOT=C:\go120\go" | Out-File -Append $env:GITHUB_ENV
+
+      - name: Build core (windows amd64)
+        shell: pwsh
+        run: |
+          $env:GOOS="windows"; $env:GOARCH="amd64"
+          go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o build\zarvand-core-x64.exe ./cmd/client
+          $env:GOARCH="386"
+          go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o build\zarvand-core-x86.exe ./cmd/client
+
+      - name: Prepare launcher embeds + manifest
+        shell: pwsh
+        run: |
+          cd windows-launcher
+          gzip -kf ..\build\zarvand-core-x64.exe -c | Out-Null
+          Copy-Item ..\build\zarvand-core-x64.exe core_amd64.tmp
+          Copy-Item ..\build\zarvand-core-x86.exe core_386.tmp
+          gzip -c core_amd64.tmp > core_amd64.gz
+          gzip -c core_386.tmp > core_386.gz
+          go install github.com/akavel/rsrc@v0.10.2
+          $env:PATH += ";" + (go env GOPATH) + "\bin"
+          rsrc -manifest app.manifest -ico icon.ico -o rsrc_windows_amd64.syso
+          rsrc -manifest app.manifest -ico icon.ico -arch 386 -o rsrc_windows_386.syso
+
+      - name: Build launcher GUI (x64 + x86, Win7 compatible)
+        shell: pwsh
+        run: |
+          cd windows-launcher
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.Version=${{ inputs.version }}" -o ..\build\ZarvandVPN-${{ inputs.version }}-x64.exe .
+          $env:GOARCH="386"
+          go build -trimpath -ldflags "-s -w -H windowsgui -X main.Version=${{ inputs.version }}" -o ..\build\ZarvandVPN-${{ inputs.version }}-x86.exe .
+          Remove-Item ..\build\zarvand-core-*.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: build/*.exe
+
+  android:
+    name: Android APK (Android 7+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Go core for Android
+        run: |
+          curl -sL https://go.dev/dl/go1.20.14.linux-amd64.tar.gz | sudo tar -C /usr/local -xz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          mkdir -p android-app/android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p android-app/android/app/src/main/jniLibs/armeabi-v7a
+          mkdir -p android-app/android/app/src/main/jniLibs/x86_64
+          cd $GITHUB_WORKSPACE
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o android-app/android/app/src/main/jniLibs/arm64-v8a/libzarvand.so ./cmd/client
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o android-app/android/app/src/main/jniLibs/armeabi-v7a/libzarvand.so ./cmd/client
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w -X zarvand/internal/version.BuildVersion=${{ inputs.version }}" -o android-app/android/app/src/main/jniLibs/x86_64/libzarvand.so ./cmd/client
+
+      - name: Download tun2socks (hev-socks5-tunnel)
+        run: |
+          JDIR=android-app/android/app/src/main/jniLibs
+          curl -sL -o $JDIR/arm64-v8a/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-arm64-v8a
+          curl -sL -o $JDIR/armeabi-v7a/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-armeabi-v7a
+          curl -sL -o $JDIR/x86_64/libhevtunnel.so https://github.com/heiher/hev-socks5-tunnel/releases/download/2.18.0/hev-socks5-tunnel-android-x86_64
+
+      - name: Generate platform glue & Build APK
+        working-directory: android-app
+        run: |
+          flutter create --platforms=android . --org pm.zarvand --project-name zarvand_vpn
+          flutter pub get
+          flutter build apk --release --split-per-abi --build-name="${{ inputs.version }}"
+
+      - name: Rename APKs
+        run: |
+          mkdir -p out
+          for f in android-app/build/app/outputs/flutter-apk/*.apk; do
+            cp "$f" "out/ZarvandVPN-${{ inputs.version }}-$(basename $f .apk | sed 's/app-//' ).apk"
+          done
+          ls -la out
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: out/*.apk
+
+  release:
+    name: Publish release
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: rel
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: rel
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: ZarvandVPN v${{ inputs.version }}
+          files: rel/*
+          generate_release_notes: true

@@ -1,0 +1,26 @@
+// ==============================================================================
+// ZarvandVPN
+// Author: ZarvandVPN Project
+// Github: https://github.com/AnishtayiN
+// Year: 2026
+// ==============================================================================
+
+package vpnproto
+
+// CalculateMaxPackedBlocks calculates the optimal number of control blocks that can be
+// packed into a single VPN packet based on the MTU, a safety percentage, and an absolute maximum.
+// Each packed control block is 7 bytes: Type(1) + StreamID(2) + SeqNum(2) + FragID(1) + TotalFragments(1).
+func CalculateMaxPackedBlocks(mtu int, percent int, absoluteMax int) int {
+
+	mtu = compatMax(mtu, 1)
+	percent = compatMax(percent, 30)
+	effectiveSize := (mtu * percent) / 100
+	count := compatMax(compatMin(compatMax(effectiveSize/PackedControlBlockSize, 1), absoluteMax), 1)
+	return count
+}
+
+
+// compatMin/compatMax generic helpers for Go 1.20 (Windows 7) compatibility.
+func compatMin[T cmpOrd](a, b T) T { if a < b { return a }; return b }
+func compatMax[T cmpOrd](a, b T) T { if a > b { return a }; return b }
+type cmpOrd interface{ ~int | ~int64 | ~uint16 | ~uint32 | ~float64  }
